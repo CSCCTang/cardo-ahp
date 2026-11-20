@@ -1,0 +1,224 @@
+# AHP 方向适配（v5）—— 三个方向的差异只放数据层，不拆 skill
+#
+# schema 只随字段结构破坏性变更升；version 随内容升（当前 version=5）。
+# 设计：指标 id、矩阵阶数、算法、契约字段三方向完全一致；方向只影响
+#   ① 指标适用性（required / optional / not_applicable）
+#   ② 打分锚点文案（覆盖 指标体系.yaml 的 anchors；未覆盖则用全局锚点）
+#   ③ 方向权重 profile（v1 为空 = 用全局专家权重；有值时必须 version+1）
+# 方向不参与路径；读不到方向（.cardo/project.json 缺失）= 写 gap AHP-GAP-DIRECTION + 用通用口径。
+# 改本文件（适用性/锚点/profile）= 改标准 → version + 1 + 跑 T4/T9/T10 回归。
+schema: cardo/ahp-direction/v1
+version: 5
+status: pendingConfirm
+pendingConfirm:
+  - G-ahp-1
+  - G-ahp-4
+changeLog:
+  - version: 2
+    reason: L3 P1-1（老旧小区 economy.irr/payback 与建议书表4 备注冲突）→ 改 not_applicable；P2-2 重归一公式；P2-4 required 覆盖语义；P2-7 方向缺失通用口径；P1-2 锚点覆盖合并规则
+  - version: 5
+    reason: L3 r4 P3 清理：版本标识统一 v5；criterionRenormalized 数组措辞复核
+  - version: 4
+    reason: L3 终评 r3 P2-1（criterionRenormalized 布尔/数组冲突）→ 统一为数组；P3-4 schema/version 语义说明
+  - version: 3
+    reason: L3 复评 P3-8④（全 16 项 NA 的退化情形未定义）→ 增 AHP-E-ALL-NA；P3-5 方向覆盖锚点缺 3/7 的合并语义补充
+indicatorSetVersion: 5
+defaultPolicy:
+  directionMissing: gap_and_generic
+  gapCode: AHP-GAP-DIRECTION
+  notApplicableHandling: exclude_from_score_and_renormalize
+  notApplicableFormula: 先在同一准则内按剩余 applicable 指标重归一（w'_ij = w_ij ÷ Σ applicable w_ik），准则层权重不变；若某准则 4 项全部 not_applicable，则该准则权重记 0 并在准则层重新归一（把该准则 id 记入 directionApplicability.criterionRenormalized 数组）；最终 globalWeight' = criterionWeight' × w'_ij，且 Σ globalWeight' = 1（容差 1e-12）。
+  notApplicableDegenerate: 若某方向下 16 项全部 not_applicable（无法重归一）→ AHP-E-ALL-NA 报错，不出权重。
+  notApplicableExample: 小区方向 economy 的 irr/payback 不适用，economy 内剩 cost/appreciation 两项，局部权重 0.5/0.1 → 重归一并列 0.833333/0.166667（1e-6 展示）。
+  genericWhenDirectionMissing: 三方向通用 = 16 项全按 指标体系.yaml 的 required（即不启用方向 optional），锚点用全局锚点，不重归一；同时写 gap AHP-GAP-DIRECTION。
+  requiredOverride: 本文件 applicability 覆盖 指标体系.yaml 的 required；契约 weights.indicators[].required 取生效值（applicability 为准）。
+  anchorMergeRule: 方向 anchorOverrides 按 score 覆盖同名档（缺的档沿用全局 anchors）；只给 1/5/9 时，3/7 档沿用全局 anchors 语义，不自动生成。
+  note: not_applicable 指标不参与打分；权重按 notApplicableFormula 重归一，并记录 renormalized=true。
+
+directions:
+  - id: 老旧街区项目
+    name: 老旧街区项目
+    description: 以沿街界面、公共空间与业态更新为主的街区型项目；权属与居民诉求相对复杂。
+    anchorTone: 强调沿街界面、公共空间、业态与居民诉求。
+    weightProfile: null
+    applicability:
+      - id: current.age
+        status: required
+      - id: current.safety
+        status: required
+      - id: current.density
+        status: required
+      - id: current.far
+        status: required
+      - id: economy.cost
+        status: required
+      - id: economy.irr
+        status: required
+      - id: economy.payback
+        status: required
+      - id: economy.appreciation
+        status: required
+      - id: compliance.plan
+        status: required
+      - id: compliance.policy
+        status: required
+      - id: compliance.infra
+        status: required
+      - id: compliance.eco
+        status: optional
+      - id: risk.policy
+        status: required
+      - id: risk.cost_overrun
+        status: required
+      - id: risk.social
+        status: required
+      - id: risk.delay
+        status: required
+    anchorOverrides:
+      - id: economy.appreciation
+        note: 街区型项目更看沿街商业租金与客流提升，锚点按「租金增幅」表述。
+        anchors:
+          - score: 1
+            desc: 租金与客流无提升空间
+          - score: 5
+            desc: 租金与客流小幅提升
+          - score: 9
+            desc: 租金与客流显著提升
+      - id: risk.social
+        note: 街区型项目居民与商户诉求交织，稳定风险权重感更强。
+        anchors:
+          - score: 1
+            desc: 居民商户矛盾突出
+          - score: 5
+            desc: 存在诉求分歧但可协商
+          - score: 9
+            desc: 诉求一致、支持改造
+  - id: 老旧厂区项目
+    name: 老旧厂区项目
+    description: 以工业遗存、成片厂房与产业导入为主的厂区型项目；结构安全与土壤环境是重点。
+    anchorTone: 强调结构安全、土壤环境、产业导入与成片开发。
+    weightProfile: null
+    applicability:
+      - id: current.age
+        status: required
+      - id: current.safety
+        status: required
+      - id: current.density
+        status: required
+      - id: current.far
+        status: required
+      - id: economy.cost
+        status: required
+      - id: economy.irr
+        status: required
+      - id: economy.payback
+        status: required
+      - id: economy.appreciation
+        status: required
+      - id: compliance.plan
+        status: required
+      - id: compliance.policy
+        status: required
+      - id: compliance.infra
+        status: optional
+      - id: compliance.eco
+        status: required
+      - id: risk.policy
+        status: required
+      - id: risk.cost_overrun
+        status: required
+      - id: risk.social
+        status: optional
+      - id: risk.delay
+        status: required
+    anchorOverrides:
+      - id: compliance.eco
+        note: 厂区项目土壤与地下水环境是硬约束。
+        anchors:
+          - score: 1
+            desc: 土壤地下水存在污染，治理成本高
+          - score: 5
+            desc: 局部需治理，可达标
+          - score: 9
+            desc: 环境本底良好，无治理负担
+      - id: current.safety
+        note: 厂区大跨结构安全是首要风险。
+        anchors:
+          - score: 1
+            desc: 结构危房，需拆除或加固
+          - score: 5
+            desc: 结构基本可用，局部加固
+          - score: 9
+            desc: 结构安全，可直接利用
+  - id: 老旧小区项目
+    name: 老旧小区项目
+    description: 以住宅小区修缮、适老化与配套补短板为主的项目；居民意愿与资金平衡是重点。
+    anchorTone: 强调居民意愿、适老化、配套短板与资金平衡。
+    weightProfile: null
+    applicabilitySource: 建议书模板 表4 备注（第九章 投资经济块）：「老旧小区不涉及预期内部收益率和投资回收期」。
+    applicability:
+      - id: current.age
+        status: required
+      - id: current.safety
+        status: required
+      - id: current.density
+        status: optional
+      - id: current.far
+        status: optional
+      - id: economy.cost
+        status: required
+      - id: economy.irr
+        status: not_applicable
+      - id: economy.payback
+        status: not_applicable
+      - id: economy.appreciation
+        status: optional
+      - id: compliance.plan
+        status: required
+      - id: compliance.policy
+        status: required
+      - id: compliance.infra
+        status: required
+      - id: compliance.eco
+        status: optional
+      - id: risk.policy
+        status: required
+      - id: risk.cost_overrun
+        status: required
+      - id: risk.social
+        status: required
+      - id: risk.delay
+        status: required
+    anchorOverrides:
+      - id: compliance.infra
+        note: 小区项目配套短板集中在停车、电梯、养老托育。
+        anchors:
+          - score: 1
+            desc: 停车电梯养老托育严重缺失
+          - score: 5
+            desc: 部分缺失，可补建
+          - score: 9
+            desc: 配套基本齐全
+      - id: risk.social
+        note: 小区项目以居民意愿与出资意愿为核心。
+        anchors:
+          - score: 1
+            desc: 居民意愿低、反对明显
+          - score: 5
+            desc: 意愿分化，需做工作
+          - score: 9
+            desc: 意愿强烈、支持改造
+
+checks:
+  - id: DIR-1
+    rule: 每个方向必须覆盖 指标体系.yaml 的全部 16 个指标 id
+  - id: DIR-2
+    rule: status 只能是 required / optional / not_applicable
+  - id: DIR-3
+    rule: not_applicable 的指标不得出现在 anchorOverrides 里
+  - id: DIR-4
+    rule: weightProfile 非 null 时必须给完整 16 项权重且和为 1（容差 1e-12）
+  - id: DIR-5
+    rule: 老旧小区项目的 economy.irr / economy.payback 必须为 not_applicable（依据建议书模板 表4 备注）
+  - id: DIR-6
+    rule: 每个 not_applicable 必须能按 notApplicableFormula 重归一（准则内剩余项 > 0，或整准则置 0 后准则层重归一）

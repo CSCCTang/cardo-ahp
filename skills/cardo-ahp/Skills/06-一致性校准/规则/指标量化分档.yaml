@@ -1,0 +1,297 @@
+# AHP 指标量化分档（v5）—— 16 项指标的取数与数值分档表
+#
+# 为什么单独成文件：主指标库 指标体系.yaml 只放「指标是什么」（定义/方向/锚点语义），
+# 本文件放「怎么算分」（metric/unit/formula/bands）。两者分文件后每个 ≤400 行，便于评审与扩项。
+# schema 只随字段结构破坏性变更升；version 随内容升（当前 version=5）。
+# 改本文件 = 改标准 → version + 1 + 同步 指标体系.yaml 的 version + 跑 T4/T9/T10 回归。
+schema: cardo/ahp-indicators-quant/v1
+version: 5
+indicatorSetVersion: 5
+changeLog:
+  - version: 5
+    reason: L3 r4 P3 清理：bandSemantics 措辞补「区间」二字（与指标体系/标度口径逐字统一）
+  - version: 4
+    reason: L3 终评 r3 P1-1（>20 不在 bandSemantics 语法内）→ 改 >=20；P3-8 tie-break 措辞统一
+  - version: 3
+    reason: L3 复评 P2-1（档位边界闭区间重叠 38 处）→ 定义 [a,b) 语义与 higher_band_wins；P3-8⑤ 增 metricDirection
+status: pendingConfirm
+pendingConfirm:
+  - G-ahp-4
+
+note: 16 项指标的分档表；range 文本按 bandSemantics 解释，condition 为条件档（只允许 1/3/5/7/9）。
+bandSemantics: range 区间文本语义：'a-b' 表示区间 [a, b)（下限含、上限不含）；'>=a' 表示 [a, +inf)；'<a' 表示 (-inf, a)。端点同值归入数值更高的一档（higher_band_wins），因此不会同时命中两档。
+bandTieBreak: higher_band_wins
+metricDirectionNote: metricDirection 描述「metric 数值越大，该指标越好（larger_better）还是越差（smaller_better）」；它与指标 direction 可以不同——risk.cost_overrun 的 metric（不可预见费比例）越大风险越低，故 metricDirection=larger_better 而指标 direction=smaller_better。
+items:
+  - id: current.age
+    metric: 失修建筑面积占比
+    unit: percent
+    metricDirection: smaller_better
+    formula: 失修建筑面积 ÷ 总建筑面积 × 100
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=60"
+      - score: 3
+        range: "45-60"
+      - score: 5
+        range: "30-45"
+      - score: 7
+        range: "15-30"
+      - score: 9
+        range: "<15"
+  - id: current.safety
+    metric: 安全风险最高等级
+    unit: level
+    metricDirection: smaller_better
+    formula: 消防评估、结构安全鉴定、地质灾害评估三者取最高档
+    interpolation: condition
+    bands:
+      - score: 1
+        condition: 重大安全隐患（任一项为重大）
+      - score: 3
+        condition: 较大风险
+      - score: 5
+        condition: 一般风险
+      - score: 7
+        condition: 低风险
+      - score: 9
+        condition: 无明显风险
+  - id: current.density
+    metric: 现状建筑密度
+    unit: percent
+    metricDirection: smaller_better
+    formula: 建筑基底面积 ÷ 用地面积 × 100
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=55"
+      - score: 3
+        range: "45-55"
+      - score: 5
+        range: "35-45"
+      - score: 7
+        range: "25-35"
+      - score: 9
+        range: "<25"
+  - id: current.far
+    metric: 现状容积率
+    unit: ratio
+    metricDirection: smaller_better
+    formula: 现状地上建筑面积 ÷ 用地面积
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=3.5"
+      - score: 3
+        range: "2.8-3.5"
+      - score: 5
+        range: "2.0-2.8"
+      - score: 7
+        range: "1.2-2.0"
+      - score: 9
+        range: "<1.2"
+  - id: economy.cost
+    metric: 单方造价相对同类基准
+    unit: percent
+    metricDirection: smaller_better
+    formula: 总投资 ÷ 总建筑面积 ÷ 同类项目单方造价基准 × 100（基准缺失记 AHP-GAP-BENCHMARK）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=130"
+      - score: 3
+        range: "115-130"
+      - score: 5
+        range: "95-115"
+      - score: 7
+        range: "85-95"
+      - score: 9
+        range: "<85"
+  - id: economy.irr
+    metric: 税后财务内部收益率
+    unit: percent
+    metricDirection: larger_better
+    formula: 取财务测算 税后 IRR（卡在 cardo/finance/v1）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<3.5"
+      - score: 3
+        range: "3.5-5"
+      - score: 5
+        range: "5-7"
+      - score: 7
+        range: "7-9"
+      - score: 9
+        range: ">=9"
+  - id: economy.payback
+    metric: 静态投资回收期
+    unit: year
+    metricDirection: smaller_better
+    formula: 取财务测算 静态回收期
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=20"
+      - score: 3
+        range: "15-20"
+      - score: 5
+        range: "12-15"
+      - score: 7
+        range: "9-12"
+      - score: 9
+        range: "<9"
+  - id: economy.appreciation
+    metric: 改造前后租金涨幅中位数
+    unit: percent
+    metricDirection: larger_better
+    formula: 周边 3 个可比项目改造前后租金涨幅取中位数（数据来源：市场调研/平台挂牌数据，写入 basis.ref）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<0"
+      - score: 3
+        range: "0-5"
+      - score: 5
+        range: "5-10"
+      - score: 7
+        range: "10-20"
+      - score: 9
+        range: ">=20"
+  - id: compliance.plan
+    metric: 规划符合项占比
+    unit: percent
+    metricDirection: larger_better
+    formula: 符合控规/专项规划的核对项数 ÷ 核对项总数 × 100
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<50"
+      - score: 3
+        range: "50-70"
+      - score: 5
+        range: "70-85"
+      - score: 7
+        range: "85-95"
+      - score: 9
+        range: ">=95"
+  - id: compliance.policy
+    metric: 政策关键条件满足率
+    unit: percent
+    metricDirection: larger_better
+    formula: 满足的政策关键条件数 ÷ 政策关键条件总数 × 100（政策清单写入 basis.ref）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<40"
+      - score: 3
+        range: "40-60"
+      - score: 5
+        range: "60-80"
+      - score: 7
+        range: "80-95"
+      - score: 9
+        range: ">=95"
+  - id: compliance.infra
+    metric: 基础设施配套率
+    unit: percent
+    metricDirection: larger_better
+    formula: 已覆盖设施项 ÷ 应配设施项 × 100（现状分析/低空指标）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<50"
+      - score: 3
+        range: "50-65"
+      - score: 5
+        range: "65-80"
+      - score: 7
+        range: "80-90"
+      - score: 9
+        range: ">=90"
+  - id: compliance.eco
+    metric: 生态环保达标项占比
+    unit: percent
+    metricDirection: larger_better
+    formula: 达标项数 ÷ 适用标准项总数 × 100
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<50"
+      - score: 3
+        range: "50-70"
+      - score: 5
+        range: "70-85"
+      - score: 7
+        range: "85-95"
+      - score: 9
+        range: ">=95"
+  - id: risk.policy
+    metric: 政策风险等级
+    unit: level
+    metricDirection: smaller_better
+    formula: 政策稳定性 + 审批路径复杂度 + 同类项目受阻情况 三项取最高档（研判依据写入 basis.note）
+    interpolation: condition
+    bands:
+      - score: 1
+        condition: 高风险（政策可能重大调整/审批路径不明）
+      - score: 3
+        condition: 中高风险
+      - score: 5
+        condition: 中风险
+      - score: 7
+        condition: 低风险
+      - score: 9
+        condition: 很低风险（政策明确稳定）
+  - id: risk.cost_overrun
+    metric: 不可预见费比例
+    unit: percent
+    metricDirection: larger_better
+    formula: 不可预见费 ÷ 总投资 × 100（反向下分：比例越高说明缓冲越足、风险越低）
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: "<3"
+      - score: 3
+        range: "3-5"
+      - score: 5
+        range: "5-8"
+      - score: 7
+        range: "8-10"
+      - score: 9
+        range: ">=10"
+  - id: risk.social
+    metric: 社会稳定风险等级
+    unit: level
+    metricDirection: smaller_better
+    formula: 以社会稳定风险评估结论为准（无稳评时按权属复杂度/居民意愿研判，写入 basis.note）
+    interpolation: condition
+    bands:
+      - score: 1
+        condition: 高风险（矛盾突出）
+      - score: 3
+        condition: 中高风险
+      - score: 5
+        condition: 中风险
+      - score: 7
+        condition: 低风险
+      - score: 9
+        condition: 可忽略
+  - id: risk.delay
+    metric: 预估延误月数
+    unit: month
+    metricDirection: smaller_better
+    formula: 关键路径前置条件（审批/征拆/迁改/场地）逐项估时取合计
+    interpolation: numeric
+    bands:
+      - score: 1
+        range: ">=12"
+      - score: 3
+        range: "6-12"
+      - score: 5
+        range: "3-6"
+      - score: 7
+        range: "1-3"
+      - score: 9
+        range: "<1"

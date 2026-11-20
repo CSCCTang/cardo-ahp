@@ -1,0 +1,404 @@
+# AHP 标度与口径（v10）
+#
+# schema 只随字段结构破坏性变更升；version 随内容升（当前 version=10）。
+# 本文件是标准资产：改标度换算/阈值/浮点纪律/聚合规则/评级边界 = 改标准
+#   → version + 1 + 跑 T4/T9/T10 回归 + 差异清单进交接。
+# pendingConfirm（可逆口径门，未获用户答复时按默认继续）：
+#   G-ahp-2 标度冲突：默认「准则 1-9、指标 0.1-1」
+#   G-ahp-3 多专家聚合：逐元素几何平均 + 专家等权
+#   G-ahp-4 10 分制与缺项处理
+#   G-ahp-6 CR 通过率≥90% 只作内部评审门槛（不进交付硬指标）
+schema: cardo/ahp-scale/v1
+version: 10
+status: pendingConfirm
+changeLog:
+  - version: 2
+    reason: L3 P1-3（0.1-1 档位与 0.25 冲突）→ 改「合法域 + 推荐档位」；P2-1 CR 比较符；P2-3 缺项打分公式；P2-5 gap 码表；P2-8 ratio 列向量模式；P3-3 模板证据补全
+  - version: 10
+    reason: T9 打分落地：登记 AHP-E-SCORE（打分越界/精度不符）
+  - version: 9
+    reason: T7 L2 r2 P3：登记问卷层错误码 AHP-E-SURVEY-MISSING/RANGE/VALUE/SHEET
+  - version: 8
+    reason: T7 L2 返修：登记 AHP-E-AGG / AHP-GAP-EXPERT-INPUT / AHP-W-EXPERT-CR / AHP-W-EXPERTS-OVER
+  - version: 7
+    reason: T5 L2 返修：错误码表补 AHP-E-INPUT/CONFIRM/CALIB/RULES（校准与输入缺省路径）
+  - version: 6
+    reason: T3 L2 返修（接线到引擎）：pairwise 必须显式给对称格（不自动补）；区分「输入值域/矩阵元素域」；ratio 不设硬域、越界仅警告 AHP-W-SCALE-EXTREME
+  - version: 5
+    reason: L3 r4 P3-2（CR 阈值比较需 1e-12 容差，避免 0.09/0.9 浮点误判通过）→ 增 crCompareTolerance/crPassRule；CR 用例统一 CR≥0.1
+  - version: 4
+    reason: L3 终评 r3 P2-2（错误码 when 重叠/优先序相反）→ 收窄 NONPOSITIVE、SCALE 补非数值、priority 重排；P3-7 n<=2/RI=0 的 CR 口径；P3-8 措辞；P3-9 full 模式三角范围
+  - version: 3
+    reason: L3 复评 P2-3（scale_1_9 未同步合法域修法）→ 补 allowedRange/strictValues/scaleErrorWhen；P2-1 bandTieBreak；P3-1 errorCodes/warnCodes；P3-8 二义表述收口
+pendingConfirm:
+  - G-ahp-2
+  - G-ahp-3
+  - G-ahp-4
+  - G-ahp-6
+
+scales:
+  - id: scale_1_9
+    name: 1-9 标度
+    appliesTo: criteria
+    values:
+      - 1
+      - 3
+      - 5
+      - 7
+      - 9
+    allowedRange:
+      - 1
+      - 9
+    strictValues: false
+    scaleErrorCode: AHP-E-SCALE
+    scaleErrorWhen: 非数值，或 <1、>9，或互反元素不在 [1/9, 9] → AHP-E-SCALE；2/4/6/8 与 1/2…1/9（互反）均合法。
+    meaning: 1 同等重要；3 稍重要；5 明显重要；7 强烈重要；9 极端重要；2/4/6/8 为中间值。
+    conversion: direct_reciprocal
+    conversionRule: 直接作为互反矩阵元素；a_ji = 1 / a_ij。column 模式按列向量 a_ij=v_i/v_j 展开；full / pairwise 模式**必须显式给出每个对称格**（不自动补，缺则 AHP-E-MISSING）；若 a_ij 与 a_ji 不互反 → AHP-E-NONRECIPROCAL（不让后填的值静默覆盖）。
+    conflictRule: 全矩阵冲突优先报错（error_no_fix），不做覆盖或平均。
+    rangeCheck: full 模式范围校验：i<j 用 [1,9]，i>j 用 [1/9,9]；下三角 <1 是小数值互反，不算越界（L3 P3-9）。
+    templateEvidence: 模板准则层 B5:B8 输入 1/3/2/4（1-9 标度的列向量写法）。
+  - id: scale_0_1
+    name: 0.1-1 标度
+    appliesTo: indicators
+    commonValues:
+      - 0.1
+      - 0.15
+      - 0.2
+      - 0.25
+      - 0.3
+      - 0.5
+      - 0.75
+      - 1
+    allowedRange:
+      - 0.1
+      - 1
+    inputRangeNote: allowedRange 是 column 模式的**输入值域** [0.1,1]；构造后的**矩阵元素域**为 [0.1,10]（v_i/v_j）。
+    strictValues: false
+    meaning: 以 1 为「同等/基准重要」，0.1 为「极端不重要」的相对重要性比例。
+    conversion: ratio_from_column
+    conversionRule: 视为列向量 v（每项相对基准的重要性比例），构造互反矩阵 a_ij = v_i / v_j；等价于对 v 归一化后取比值。
+    scaleErrorCode: AHP-E-SCALE
+    scaleErrorWhen: 取值为非数值、小于 0.1 或大于 1（合法域 [0.1,1]，两位小数）；档位表只是推荐值，不是闭集（模板 B56=0.25 合法）。
+    extremeRatioWarn: 构造后的任意 a_ij 或 a_ji 超出 [1/9, 9] 时记警告 AHP-W-SCALE-EXTREME（1-9 语义上限），不报错、不截断（引擎已实现并输出 warnings[]）。
+    templateEvidence: 模板指标层 B37:B40 = 1/0.5/0.3/0.2；B45:B48 = 1/0.5/0.3/0.2；B53:B56 = 1/0.75/0.5/0.25；B61:B64 = 1/0.5/0.3/0.2（比值构造，恒等一致）。
+  - id: ratio
+    name: 直接比值
+    appliesTo: both
+    valuesNote: 无固定档位，直接给数值或分数（如 2、1.5、0.5）
+    meaning: 直接给 a_ij = 第 i 项相对第 j 项的重要程度倍数（或分数）。
+    conversion: direct_ratio
+    conversionRule: 校验 a_ij * a_ji = 1（容差见 numeric.reciprocityTolerance）；不满足则报错，不自动修正。
+    inputRange: 无硬域（任意正数；互反由 a_ji=1/a_ij 保证）
+    elementRange: 无硬域；元素超出 [1/9,9] 仅警告 AHP-W-SCALE-EXTREME（不报错、不截断）
+    inputModesAllowed:
+      - full
+      - pairwise
+    columnModeRule: ratio 不支持 column 模式（列向量展开只属于 0.1-1 标度）；传入 column → AHP-E-SCALE。
+
+inputModes:
+  - id: full
+    name: 全矩阵
+    note: 给 n×n 全部元素；逐格校验正性与互反性；同时给出 a_ij 与 a_ji 冲突 → AHP-E-NONRECIPROCAL（不覆盖、不平均）。
+  - id: column
+    name: 列向量
+    note: 只给第一列（每项相对第 1 项），按 a_ij = v_i / v_j 展开；模板写法。仅 scale_0_1 支持；scale_1_9 的列向量按本行同样展开（模板 B5:B8 即此写法）。
+  - id: pairwise
+    name: 两两清单
+    note: 给 i/j/value 三元组列表；**必须成对给出 (i,j) 与 (j,i)**（两向都显式）；缺 a_ji → AHP-E-MISSING 报错（不自动补、不猜）。
+
+defaultProfile:
+  profileId: default-G2
+  criteriaScale: scale_1_9
+  indicatorsScale: scale_0_1
+  note: 任务书说准则与指标都用 1-9；模板指标层用比值；建议书指标层写 0.1-1。v1 默认按本 profile，可配置（G-ahp-2）。改默认 = 升版本。
+
+validation:
+  orderRange:
+    - 2
+    - 10
+  positivity: true
+  reciprocityTolerance: 1e-12
+  diagonalMustBeOne: true
+  onDirty: error_no_fix
+  orderNote: 阶数必须 2-10；n>10 → AHP-E-ORDER 报错，**不复制模板 CHOOSE(MIN(n,10)) 的静默截断**（模板允许 >10 但取 RI[10]，本插件不这么做）。
+  dirtyCodes:
+    - AHP-E-ORDER
+    - AHP-E-NONPOSITIVE
+    - AHP-E-NONRECIPROCAL
+    - AHP-E-DIAGONAL
+    - AHP-E-MISSING
+    - AHP-E-SCALE
+
+numeric:
+  compareTolerance: 1e-12
+  ciZeroTolerance: 1e-12
+  crNonNegative: true
+  displayDecimals: 6
+  eigenIterationsMax: 1000
+  eigenTolerance: 1e-12
+  toleranceNote: 计算比较一律 1e-12；1e-9 只用于「与模板/建议书印刷值对账」（印刷值只有 2-4 位小数），不得用于回代。
+  note: 权重/λmax/CI/CR 全精度参与比较；6 位小数只用于展示；禁止用舍入后的权重回代。
+
+consistency:
+  lambdaMaxTolerance: 1e-12
+  ciFormula: (lambdaMax - n) / (n - 1)
+  crFormula: ci / ri
+  crZeroRule: n<=2 或 RI=0 时 CR 记 0、pass=true（与模板 B25 的 IF(B23=0,0,CI/RI) 一致），不做除零。
+  riTable:
+    1: 0
+    2: 0
+    3: 0.58
+    4: 0.9
+    5: 1.12
+    6: 1.24
+    7: 1.32
+    8: 1.41
+    9: 1.45
+    10: 1.49
+  crThreshold: 0.1
+  crComparator: "<"
+  crCompareTolerance: 1e-12
+  crPassRule: pass = (cr < crThreshold - crCompareTolerance)；即与 0.1 相差 1e-12 以内的值按 0.1 处理（CR=0.1 不通过，与模板/建议书一致）。
+  crComparatorNote: 任务书 §1 写「CR 值≤0.1」，模板 B26 与建议书 [0340] 写「CR＜0.1」；本插件从模板/建议书取 `<`（CR 恰为 0.1 → 不通过），差异记 G-ahp-6 交接。
+  passRateTarget: 0.9
+  passRateRole: internal_review_only
+  passRateNote: 任务书 §1 研究目标「CR≤0.1 通过率≥90%」按内部评审门槛记录，不作交付验收硬指标（G-ahp-6）。
+  dualAlgorithm:
+    rule: maxDelta <= max(1e-12, CR)
+    note: 几何平均行积法与特征值法对**不一致**矩阵给出不同的近似解，差值与不一致度同阶（实测 Δ/CR 稳定在 0.06~0.16）。故双算法差不能写死绝对值 1e-12——那等价于要求「矩阵完全一致」，真实专家判断必然有分歧（CR>0），会让 09 步对任何真实项目必 FAIL。CR=0（完全一致矩阵）时仍要求精确相等。
+    deltaRatioObserved: 0.06-0.16
+
+aggregation:
+  defaultRule: geometric-elementwise
+  compareRule: weight-then-average
+  expertEqualWeight: true
+  minExperts: 5
+  maxExperts: 7
+  degradeWhenBelowMin: true
+  degradeGapCode: AHP-GAP-EXPERTS
+  dispersion:
+    perIndicator:
+      - range
+      - mean_abs_deviation
+    reviewThreshold:
+      range: 0.2
+      meanAbsDeviation: 0.1
+    note: 超阈值只建议复评/加专家，不自动剔除离群专家。
+
+calibration:
+  maxCandidates: 3
+  autoApply: false
+  requireApproveBy: true
+  minCrImprovement: 0.01
+  maxChangedCells: 2
+  backupSuffix: .bak
+  note: 只给候选与方向；采用必须带用户确认（--approve-by），原始矩阵先备份。
+
+scoring:
+  scale: 10
+  min: 0
+  max: 10
+  decimals: 1
+  missingPolicy: forbid_zero_fill
+  partialFlag: true
+  bandTieBreak: higher_band_wins
+  bandTieBreakNote: 分档区间按 [a,b) 解释；端点同值归入「区间数值更高」的一档（higher_band_wins；对 smaller_better 指标即分数更差的那档，如 current.age 的 60→1 分），避免同一输入命中两档（L3 P2-1/P3-8）。
+  compositeFormula: 全覆盖时 composite = Σ(score_i × globalWeight_i)；有缺项时 composite = Σ(score_i × globalWeight_i) ÷ Σ(globalWeight_i, 仅已覆盖项)，并标 partial=true（分母不含缺项权重）。
+  requiredMissingPolicy: required 指标缺失 → 该方案不出分，exit 3（不编分数）；但成稿不得只写「资料缺失」，须给「初步判定（推断依据＋置信度）」，缺项登记进数据缺口清单。
+  optionalMissingPolicy: optional 指标缺失 → 可出分，标 partial=true 与 coverage.optionalMissing 列表。
+  coverageReport: 输出 coverage.scored / coverage.required / coverage.optional / coverage.weightCovered。 
+  ratings:
+    - min: 9
+      max: 10
+      label: 优秀
+      action: 优先投资、全力推进
+    - min: 7
+      max: 9
+      label: 良好
+      action: 可行投资、分期推进
+    - min: 6
+      max: 7
+      label: 一般
+      action: 审慎投资、优化方案
+    - min: 0
+      max: 6
+      label: 不可行
+      action: 暂缓/放弃投资
+  ratingBoundary: left_closed_right_open
+  note: 边界 9/7/6 左闭右开；缺项列 missing 并标 partial，不补 0。
+
+direction:
+  field: direction
+  values:
+    - 老旧街区项目
+    - 老旧厂区项目
+    - 老旧小区项目
+  defaultPolicy: read_card_or_gap
+  gapCode: AHP-GAP-DIRECTION
+  note: 方向不参与路径、不拆 skill；差异见 方向适配.yaml。
+
+expert:
+  roles:
+    - 项目负责人
+    - 投资专家
+    - 规划专家
+    - 财务专家
+  countRange:
+    - 5
+    - 7
+  rolesSource: 以任务书 §2.2.2 [0106] 为准（项目负责人 1、投资专家 2、规划专家 2、财务专家 1 = 6 人）；§4.2.2 [0152] 的「投资总监/项目负责人/规划工程师/财务经理」为同一构成的另一种叫法，映射见下。
+  rolesMap:
+    - taskbook422: 投资总监
+      canonical: 投资专家
+    - taskbook422: 项目负责人
+      canonical: 项目负责人
+    - taskbook422: 规划工程师
+      canonical: 规划专家
+    - taskbook422: 财务经理
+      canonical: 财务专家
+  note: v1 支持 5-7 位专家、等权；专家角色只用于问卷抬头与人读报告，不参与权重计算。
+
+errorCodes:
+  - code: AHP-E-ORDER
+    when: 矩阵阶数不在 [2,10]（n=1 或 n>10）
+    blocking: true
+    priority: 1
+  - code: AHP-E-SCALE
+    when: 标度越界或非数值（1-9 超出 [1,9] 或互反不在 [1/9,9]；0.1-1 超出 [0.1,1]；ratio 用 column 模式；元素非数值）
+    blocking: true
+    priority: 2
+  - code: AHP-E-NONRECIPROCAL
+    when: 全矩阵模式 a_ij * a_ji != 1（容差 1e-12）
+    blocking: true
+    priority: 4
+  - code: AHP-E-DIAGONAL
+    when: 对角线元素 != 1
+    blocking: true
+    priority: 5
+  - code: AHP-E-MISSING
+    when: pairwise 缺对称格 / 矩阵缺项
+    blocking: true
+    priority: 6
+  - code: AHP-E-NONPOSITIVE
+    when: 元素 = 0 或 < 0（字符串/NaN 等非法数字类型归 AHP-E-SCALE）
+    blocking: true
+    priority: 3
+  - code: AHP-E-AGG
+    when: 聚合时无可用专家问卷（全部缺失或结构不合规）
+    blocking: true
+    priority: 13
+  - code: AHP-E-SURVEY-MISSING
+    when: 问卷上三角缺项/下三角为空
+    blocking: true
+    priority: 14
+  - code: AHP-E-SURVEY-RANGE
+    when: 问卷填写值越界/非正/非数值
+    blocking: true
+    priority: 15
+  - code: AHP-E-SURVEY-VALUE
+    when: 问卷单元格不是数值（文本/NaN/inf）
+    blocking: true
+    priority: 16
+  - code: AHP-E-SURVEY-SHEET
+    when: 问卷缺 sheet（准则层/指标层）
+    blocking: true
+    priority: 17
+  - code: AHP-E-INPUT
+    when: 文件不存在/坏 JSON/候选结构不符/参数越界（--max-candidates 小于 1 等）
+    blocking: true
+    priority: 9
+  - code: AHP-E-CONFIRM
+    when: 校准采用未提供 --approve-by（不自动采用）
+    blocking: true
+    priority: 10
+  - code: AHP-E-CALIB
+    when: 候选矩阵采用后 CR 仍 ≥ 阈值（拒绝采用）
+    blocking: true
+    priority: 11
+  - code: AHP-E-RULES
+    when: 规则文件缺失或不可解析
+    blocking: true
+    priority: 12
+  - code: AHP-E-SCORE-BAND
+    when: 打分输入没有落到任何分档
+    blocking: true
+    priority: 7
+  - code: AHP-E-SCORE
+    when: 打分越界（不在 0-10）/精度超过 1 位小数/非数值或布尔；或方案无可用权重
+    blocking: true
+    priority: 18
+  - code: AHP-E-ALL-NA
+    when: 某方向下 16 项全部 not_applicable（退化，无法重归一）
+    blocking: true
+    priority: 8
+warnCodes:
+  - code: AHP-W-SCALE-EXTREME
+    when: 互反元素超出 [1/9, 9]（0.1-1 标度可产生 10 倍比值）
+    blocking: false
+  - code: AHP-W-MANUAL-INTERP
+    when: 打分用了 manualInterp=true 的 1 位小数内插
+    blocking: false
+  - code: AHP-W-DEGRADED-EXPERTS
+    when: 专家数 < 5 仍聚合（同时写 gap AHP-GAP-EXPERTS）
+    blocking: false
+  - code: AHP-W-EXPERT-CR
+    when: 某位专家的矩阵 CR 未通过（不阻断聚合，仅提示）
+    blocking: false
+  - code: AHP-W-EXPERTS-OVER
+    when: 专家数 > maxExperts（7）
+    blocking: false
+priorityNote: 同一输入命中多码时按 priority 升序报第一个。0/负值同时命中 SCALE(2) 与 NONPOSITIVE(3) → 先报 SCALE；非数值只命中 SCALE。
+gapCodes:
+  - code: AHP-GAP-DIRECTION
+    what: 读不到项目方向
+    when: .cardo/project.json 缺失或无 direction
+    need: 用户指定方向或补 .cardo/project.json
+    owner: cardo-status / 用户
+  - code: AHP-GAP-EXPERTS
+    what: 专家数量不足 5 位
+    when: 聚合时可用矩阵份数 < minExperts
+    need: 补专家问卷
+    owner: 用户
+  - code: AHP-GAP-EXPERT-INPUT
+    what: 单份专家问卷缺失/不可读/缺项/非互反
+    when: 聚合读取问卷时该份不可用
+    need: 重发问卷或请专家重新填写；该份 skipped，不补数
+    owner: 用户
+  - code: AHP-GAP-FINANCE
+    what: 缺 cardo/finance/v1 财务测算
+    when: 打分需要 IRR/回收期/成本而财务测算缺失
+    need: cardo-invest 产出 财务测算.json
+    owner: cardo-invest
+  - code: AHP-GAP-LOWAIR
+    what: 缺 cardo/lowair-indicators/v1 低空指标
+    when: 密度/容积率/配套率等指标需要低空指标而缺失
+    need: cardo-osgb 产出 现状指标.json
+    owner: cardo-osgb
+  - code: AHP-GAP-SCORE
+    what: 指标缺打分依据
+    when: 某指标既无人工打分也无可用上游数据
+    need: 补现状依据或人工打分
+    owner: 用户
+  - code: AHP-GAP-BENCHMARK
+    what: 缺同类项目成本基准
+    when: economy.cost 需要单方造价基准但无同类项目数据
+    need: 补同类项目造价基准或改用绝对分档
+    owner: 用户
+  - code: AHP-GAP-TEMPLATE
+    what: 模板版式文件缺失
+    when: ahp_export 找不到 模板/ 下的 xlsx 版式
+    need: 按脱敏规则补模板（T8 落地）
+    owner: cardo-ahp
+  - code: AHP-GAP-PENDING-CONFIRM
+    what: 口径门未获用户确认
+    when: G-ahp-1/2/3/4/6 未答复
+    need: 用户确认口径；确认后升版本 + 跑回归
+    owner: 用户
+outputs:
+  weightsSchema: cardo/ahp-weights/v1
+  scoresSchema: cardo/ahp-scores/v1
+  judgmentSchema: cardo/ahp-judgment/v1
+  weightsPath: 05_过程/AHP/权重表.json
+  scoresPath: 05_过程/AHP/评分表.json
+  xlsxPath: 05_过程/AHP/AHP权重表.xlsx
