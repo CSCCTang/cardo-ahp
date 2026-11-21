@@ -26,6 +26,7 @@ from pathlib import Path
 PACKAGE = "CardoAHP"
 ENTRY = "开工.py"
 NAME = "cardo-ahp"
+VERSION = "0.1.1"
 # 工作区目录架构与用途：与包内 开工.py 的 DIRS 对齐；只建目录，不写内容
 DIR_GUIDE = [('输入文件', '放原始材料'), ('输入文件/01-AHP四准则模板', 'AHP 四准则模板（按模板填，别改表头）'), ('输入文件/02-专家问卷（待发放）', '空白专家问卷，发卷从这里取'), ('输入文件/02-专家问卷（已回收）', '专家填好的问卷放这里'), ('输入文件/03-方案打分表', '方案打分表放这里'), ('过程文件', '流水线中间件与运行报告，跑完之前不要动'), ('成果文件', '最终交付件，跑完在这里取'), ('记忆与规则', '本项目的规则与记忆，跨会话复用')]
 DIRS = [rel for rel, _ in DIR_GUIDE]
@@ -288,6 +289,9 @@ def _action_args(args):
 
 
 def main(argv):
+    if "--version" in argv:
+        print("%s %s" % (NAME, VERSION))
+        return 0
     if "--doctor" in argv:
         return doctor()
     if "--where" in argv:
