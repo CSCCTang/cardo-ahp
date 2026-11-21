@@ -1053,8 +1053,8 @@ def cmd_scaffold(target: Path, project_name: str, experts: int, baseline_mode: s
         "# 1) 改评分：编辑 输入文件/03-方案打分表/AHP方案评分表.xlsx",
         "#    （黄色格填 0-10 分，依据列写出处；方案信息表登记方案编号与名称）",
         "# 2) 全链或只重跑评分段",
-        'python Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace .',
-        'python Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace . --from 08',
+        'python <技能目录>/Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace .',
+        'python <技能目录>/Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace . --from 08',
         "```", "",
         f"- 专家 {experts} 位；基线模式 `{baseline_mode}`（none = 只做结构自洽验证）。",
         ("- 演示示例：工作区参数 demo=true，四件产物均带「演示样例」页脚。" if demo else
@@ -1069,7 +1069,7 @@ def cmd_scaffold(target: Path, project_name: str, experts: int, baseline_mode: s
     print(f"已生成工作区：{target}")
     print(f"  技能 {built} 个；输入（模板/问卷/评分表）已就位；基线模式 {baseline_mode}")
     print(f"  下一步：改 {SCORESHEET_REL} 后执行")
-    print(f"  python Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace {target}")
+    print(f"  python <技能目录>/Skills/00-Cardo城市更新AHP层次分析法/scripts/pipeline.py run --workspace {target}")
     return 0
 
 

@@ -4,47 +4,56 @@ description: Cardo AHP 投资决策量化流水线（自包含）。当用户要
 ---
 > **dsh 插件运行方式（构建脚本生成，勿手改）**
 >
-> 本文件是插件 `cardo-ahp` 内嵌的技能正文。正文里出现的 `python CardoAHP\开工.py <参数>`，在本插件中一律改写为
-> `python <技能目录>/scripts/cardo.py <参数>`，其中 `<技能目录>` 取工具结果 `<skill_resources>` 里 resourceBase 给出的目录。
+> 本文件是插件 `cardo-ahp` 内嵌的技能正文。技能目录就是工具结果 `<skill_resources>` 里 `resourceBase` 给出的目录，
+> 下文记作 `<技能目录>`。**正文里的命令已全部写成 `python "<技能目录>/scripts/cardo.py" <参数>`**，
+> 照着执行即可：不要拼 `CardoAHP\...`、不要猜安装位置、也不要做路径替换。
+> `开工.py`、`Skills\`、`requirements.txt` 都与 `scripts\cardo.py` 同在技能目录内，由启动器转交。
 >
-> 启动器 `cardo.py` 负责定位 Cardo 交付包、用本机已有的 `runtime\python` 运行 `开工.py`，工作区默认取当前目录，
-> 不联网、不装依赖、不上传任何文件。定位顺序：`CARDO_PACKAGE` → `CARDO_HOME\CardoAHP` → 当前目录及上三级 → `%USERPROFILE%\Cardo交付`。
-> 运行时顺序：`CARDO_RUNTIME` → 交付包自带 `runtime` → `CARDO_RUNTIME_HOME\CardoAHP\runtime` → `CARDO_HOME\CardoAHP\runtime`。
+> 启动器 `cardo.py` 负责定位包内 `开工.py` 并选 Python：优先包内 `runtime\python`；派生包没有 runtime 时用系统
+> Python，并在 `%LOCALAPPDATA%\cardo\venv-ahp` 按 `requirements.txt` 建环境。不联网、不上传任何文件。
 >
-> 全部输入都是**本地文件夹或本地文件路径**：用户可在对话里直接给绝对路径，或用 dsh 自带的"选择工作区目录"把路径设为当前目录。
+> **工作目录**：给插件一个独立空文件夹（设为当前目录，或在命令后加 `--workspace "<工作区>"`）。
+> 首次在新工作区运行会先按约定建出目录架构（已存在则跳过、不覆盖），再交给 `开工.py`。
+> 不接受把工作目录设在插件安装目录（`node_modules\cardo-ahp`）或 `DSH_HOME` 内：
+> 显式 `--workspace` 越界会直接拒绝并给出可用默认路径；未指定 `--workspace` 且当前目录越界时，
+> 启动器改用默认工作区 `%USERPROFILE%\Cardo工作区\cardo-ahp-<时间戳>\`，并在输出里说明。
+>
+> 全部输入都是**本地文件夹或本地文件路径**：用户在对话里给绝对路径，或用 dsh 自带的“选择工作区目录”把路径设为当前目录。
 > 本包不自带前端界面，产物落在工作区，结果在对话里返回。
 >
-> **工作目录**：给插件一个独立空文件夹（`--workspace <文件夹>` 或设为当前目录），成果与中间件都只写在这里。
-> 不接受把工作目录设在插件安装目录（`node_modules\cardo-ahp`）、`DSH_HOME` 或交付包目录内——遇到就提示并停止。
-> 每次最好用新文件夹；多个包各用各的文件夹，互不读写。
->
-> 首次使用先跑 `python <技能目录>/scripts/cardo.py --doctor`；找不到交付包时按提示设置 `CARDO_HOME`
-> （指向包含 `CardoAHP\` 的目录，例如 `C:\path\to\cardo-packages`），运行时也可用 `CARDO_RUNTIME` 指向已有 runtime 目录。
+> **第一次调用**：先跑 `python "<技能目录>/scripts/cardo.py"`（不带参数）。它会在工作区建好目录架构、
+> 逐条说明每个目录放什么，然后停下等你放料；**没有输入不要自己往下跑**。
+> 环境自检用 `python "<技能目录>/scripts/cardo.py" --doctor`（打印交付包、入口、Python 与默认工作区）。
 
 # CardoAHP · AHP 量化流水线
 
-一个文件夹就是这条流水线：把 `CardoAHP/` 整个放进用户的项目文件夹，**不用安装、不用配置**。
+一个文件夹就是这条流水线：独立使用时把 `CardoAHP/` 整个放进用户的项目文件夹；插件方式下它已装在技能目录里，**不用安装、不用配置**。
 
 **独立工作区、独立交付**：一个包一个工作区、一份交付；四包放同一目录不会自动串联，也不共用状态文件。
 跨包只靠产物交接——把上游产物复制进本包 `输入文件/`。
 **本包只吃问卷**：不接收低空实测数据；实测进现状与投资，不进 AHP 权重层（理由见通用规范第一节第 3 条）。
 判断 vs 实测的分工与单会话自足要求，见《Cardo 四包通用规范》（`交付规范/Cardo四包通用规范.md`）。
 
+**交互节奏（插件版，四步）**：
+1. **进场先建目录**：第一次调用先跑 `python "<技能目录>/scripts/cardo.py"`，它会把 `输入文件\`、`过程文件\`、`成果文件\` 等目录建好（幂等，已存在不覆盖），并逐条说明每个目录放什么——把这段说明原样转给用户。
+2. **建完就停**：没有输入文件不开工。缺料时说清缺什么、放到哪个目录，等用户放好再继续。
+3. **岔口让用户拍板**：选方案、定口径、改参数、跳步这类判断，一次只问一个，摆出可选项请用户选，不替用户默认。
+4. **用户回「继续」后再跑**：材料到位后重跑 `python "<技能目录>/scripts/cardo.py"` 往下走。
+
 **放料清单**：`开工.py` 会在工作区生成 `放料清单.md`，列出要什么、放哪、现在到没到；本文档是执行细则。
 **首次运行自动备依赖**：缺依赖就在用户缓存（`%LOCALAPPDATA%\cardo\venv-ahp`）按 `requirements.txt`
 建虚拟环境并安装（阿里云→清华→USTC→官方源回退），之后复用；技能包目录保持只读。
 需本机已装 Python 3.9+。
 
-
 **技能包只读**：本文件夹里的 `SKILL.md`、`开工.py`、`requirements.txt`、`Skills/`、`assets/` 在开工过程中一个字节都不会被写；
 运行期状态只写工作区与用户缓存。
-工作区默认是**本文件夹的上一级目录**（独立使用时即项目文件夹，如 `XX项目/`；以插件方式安装时请用 `--workspace` 指定项目目录）：`输入文件/` 放料、`过程文件/` 留痕、`成果文件/` 出活，
+工作区默认取**当前目录**（插件方式；独立使用时是本文件夹的上一级目录，如 `XX项目/`）：`输入文件/` 放料、`过程文件/` 留痕、`成果文件/` 出活，
 `工作区参数.json` 和 `.cardo/`（虚拟环境）也在那里。换项目时把技能文件夹整体拷走即可，不会带走任何项目数据。
 
 在项目文件夹里执行命令（`--workspace` 可显式指定别的工作区）：
 
 ```powershell
-python CardoAHP\开工.py
+python "<技能目录>/scripts/cardo.py"
 ```
 
 ## 开工四步
@@ -58,7 +67,7 @@ python CardoAHP\开工.py
 两个文件每次运行都会刷新。想一项一项确认，跑：
 
 ```text
-python CardoAHP\开工.py --intake
+python "<技能目录>/scripts/cardo.py" --intake
 ```
 
 **空工作区首跑自动铺表**（`make_templates.py`）：
@@ -84,7 +93,7 @@ python CardoAHP\开工.py --intake
 2. **领卷（发卷）**：
 
 ```powershell
-python CardoAHP\开工.py --to 02
+python "<技能目录>/scripts/cardo.py" --to 02
 ```
 
    产出 5 份 `AHP专家问卷-专家N.xlsx`，同时落在两处：
@@ -97,18 +106,18 @@ python CardoAHP\开工.py --to 02
    顺手在 `专家名单.xlsx`（已自动释放）补角色与回收状态（可选）。回收后跑 01→07：
 
 ```powershell
-python CardoAHP\开工.py --to 07
+python "<技能目录>/scripts/cardo.py" --to 07
 ```
 
 4. **算权重**：`--to 07` 产出 `成果文件/AHP权重表.xlsx`（第 09 步装配后归位到
    `成果文件/成品版/AHP权重表/AHP权重表_成品版.xlsx`），含准则权重、指标权重、综合权重与 CR 检验。
 
-5. **方案打分**：`python CardoAHP\开工.py --from 07`（或直接 `python CardoAHP\开工.py`）跑到 08 ——
+5. **方案打分**：`python "<技能目录>/scripts/cardo.py" --from 07`（或直接 `python "<技能目录>/scripts/cardo.py"`）跑到 08 ——
    08 会**按《方案清单》的实际方案数生成空白评分表并停下**（方案名已预填好）。
    你只需填黄色格 0–10 分与依据列（指标ID/权重/标准不要动）。填好后：
 
 ```powershell
-python CardoAHP\开工.py --from 08
+python "<技能目录>/scripts/cardo.py" --from 08
 ```
 
 `开工.py` 每次运行都会：依赖自检（缺就建 `.cardo/venv-ahp`，按 阿里云 → 清华 → USTC → 官方源 回退安装）→ 建目录 → 释放四准则模板与专家名单

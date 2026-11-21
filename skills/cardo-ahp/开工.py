@@ -323,7 +323,7 @@ def write_intake_list(rows, params: dict | None = None) -> Path:
               "{}         # 一项一项问，确认材料落位".format(cmd_hint("--intake")),
               "```", "",
               "> 已装 Python 3.9+ 的机器，把开头的解释器换成 `python` 也一样：",
-              "> `python {}\\开工.py --to 02`".format(SKILL.name),
+              "> `python <技能目录>/scripts/cardo.py --to 02`".format(SKILL.name),
               "> 详细的填写位置与口径见 **《怎么填.md》**（工作区根目录）。", ""]
     target.write_text("\n".join(lines), encoding="utf-8")
     return target
@@ -691,7 +691,10 @@ def cmd_hint(*args: str) -> str:
         exe = rel_to_root(RUNTIME_PY)
     else:
         exe = "python"
-    parts = [exe, rel_to_root(SKILL / "开工.py")]
+    if RUNTIME_PY.is_file():
+        parts = [exe, rel_to_root(SKILL / "开工.py")]
+    else:
+        parts = ["python", "<技能目录>/scripts/cardo.py"]
     parts.extend(args)
     return " ".join(parts)
 

@@ -150,7 +150,7 @@ def build(ws: Path) -> list[dict]:
             ],
             "where": norm_path(ws / SCHEME_LIST_REL),
             "done_when": "B1 有项目名 + 方案名称列有 2~4 行有字",
-            "how_check": "重跑一次 `python CardoAHP\\开工.py`，本文件的状态会变成「已完成」",
+            "how_check": "重跑一次 `python <技能目录>/scripts/cardo.py`，本文件的状态会变成「已完成」",
             "progress": sch["note"],
         },
         {
@@ -174,7 +174,7 @@ def build(ws: Path) -> list[dict]:
             "what": "专家填完的问卷**原样**放回回收区（文件名不要改）：",
             "detail": [
                 f"已回收 {sur['recv']} 份，至少要 {MIN_QUESTIONNAIRES} 份才能算权重",
-                "收齐后跑 `python CardoAHP\\开工.py --to 07` 算权重与一致性",
+                "收齐后跑 `python <技能目录>/scripts/cardo.py --to 07` 算权重与一致性",
                 "**如果一致性 CR 超 0.1**，看 `过程文件/03-回收校验/回收校验报告.md`，"
                 "里面有「怎么改」和标度对照，转给专家本人调整",
             ],
@@ -194,14 +194,14 @@ def build(ws: Path) -> list[dict]:
             ],
             "where": norm_path(ws / SCORESHEET_REL),
             "done_when": "所有方案、所有指标的黄色格都填了，依据列也写了出处",
-            "how_check": "跑 `python CardoAHP\\开工.py --from 08`，缺项会被点名",
+            "how_check": "跑 `python <技能目录>/scripts/cardo.py --from 08`，缺项会被点名",
             "progress": sco["note"],
         },
         {
             "no": "⑤", "title": "出成果", "who": "系统", "state": res["status"],
             "what": "跑最后一步，系统算完并出成果文件：",
             "detail": [
-                "命令：`python CardoAHP\\开工.py --from 08`",
+                "命令：`python <技能目录>/scripts/cardo.py --from 08`",
                 "产出：`成果文件/AHP权重表.xlsx`、`AHP方案评分结论.xlsx`、"
                 "`AHP权重与评分结论.docx`",
                 "第 09 步会独立复算一遍（不信任前面的结果，自己再算一次对账）",

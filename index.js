@@ -19,6 +19,7 @@ export function apply(ctx) {
     name: 'cardo-ahp',
     description: "Cardo AHP 投资决策量化流水线：专家问卷、权重与一致性、方案评分与成果装配。",
     whenToUse: "用户要做 AHP 专家问卷、算权重与一致性、做方案评分并产出《AHP权重表》《AHP方案评分结论》《AHP权重与评分结论》《AHP依据对照表》时使用。",
+    source: 'custom',
     content: skillBody(readFileSync(join(skillDir, 'SKILL.md'), 'utf8')),
     resourceBase: { kind: 'directory', path: skillDir },
   })
