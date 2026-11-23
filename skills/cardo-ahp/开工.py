@@ -7,7 +7,9 @@
   → 校验四准则模板 / 回收问卷 / 工作区参数.json → 调 01→09 流水线。
 
 流程有两处天然停顿：--to 02 发卷 → 回收问卷；08 首次生成空白评分表 → 填表后 --from 08。
-退出码：0 全过；3 缺料/参数不全；4 设计好的拒收（如演示数据未声明 --demo）；1 流水线硬失败（含 08 首次等填表）；2 环境或结构问题。
+缺料不黑箱：会说明（缺什么 / 放到哪 / 怎么准备）、留 待补料.json，并且只停这一次；
+不做轮询、不后台守候、不自动扫描目录，收到用户确认后一口气跑到成果。
+退出码：0 全过；3 缺料/等人填表；4 设计好的拒收（如演示数据未声明 --demo）；1 流水线硬失败；2 环境或结构问题。
 """
 from __future__ import annotations
 
@@ -320,7 +322,6 @@ def write_intake_list(rows, params: dict | None = None) -> Path:
               "{}          # 生成空白问卷（发卷前）".format(cmd_hint("--to 02")),
               "{}          # 收齐问卷后算权重与一致性".format(cmd_hint("--to 07")),
               "{}        # 填完评分表后出成果".format(cmd_hint("--from 08")),
-              "{}         # 一项一项问，确认材料落位".format(cmd_hint("--intake")),
               "```", "",
               "> 已装 Python 3.9+ 的机器，把开头的解释器换成 `python` 也一样：",
               "> `python <技能目录>/scripts/cardo.py --to 02`".format(SKILL.name),
@@ -534,57 +535,32 @@ def write_howto() -> Path:
     return target
 
 
-def run_intake(rows) -> int:
-    """一项一问：给绝对路径、给准备方法、确认是否已放好。返回 0 继续，3 待补料。"""
-    if not sys.stdin or not sys.stdin.isatty():
-        say("  当前不是交互终端，只输出清单；请在终端里重跑 --intake，或直接按清单放料。")
-        return 3
-    say("")
-    say("  ---- 收料引导（一项一项来；回车=已放好，输入 s=暂时没有，q=退出）----")
+def write_pending(rows, blockers: list[str], notes: list[str]) -> Path:
+    """缺料时落一份机器可读的《待补料.json》：缺什么、放到哪、怎么准备、补齐后怎么重跑。"""
+    target = ROOT / "过程文件/00-总控/待补料.json"
+    pending = []
     for item, hits in rows:
-        if hits:
-            say("  [已到位] {}：{}".format(item["name"], norm(hits[0].relative_to(ROOT))))
-            continue
-        say("")
-        say("  需要：{}（{}）".format(item["name"], "必需" if item["required"] else "可选"))
-        say("  放到：{}".format(norm(ROOT / item["dst"])))
-        say("  怎么来：{}".format(item["how"]))
-        say("  用途：{}".format(item["why"]))
-        if item.get("empty_hint"):
-            say("  下一步：{}".format(item["empty_hint"].format(
-                run=cmd_hint("--to 02"), pending=norm(ROOT / PENDING_DIR))))
-        while True:
-            try:
-                answer = input("  放好了吗？[回车=好了 / s=没有 / q=退出] ").strip().lower()
-            except EOFError:
-                # stdin 被重定向（如 < /dev/null）而 isatty() 判断漏了这种情形：
-                # 没有输入可读，视为「暂时没有」，按该项的缺料口径处理，不要崩栈。
-                answer = "s"
-            if answer in ("", "y", "yes"):
-                break
-            if answer in ("s", "n", "no", "没有"):
-                if item["required"]:
-                    say("  ! 这一项是硬门槛，缺了不能开工。补好后重跑。")
-                    return 3
-                say("  · 记为缺口：产物照样给初步判定，缺口进数据缺口清单，不影响开工。")
-                break
-            if answer in ("q", "quit", "exit"):
-                say("  已退出收料引导；清单已保存到 放料清单.md")
-                return 3
-            say("  只认 回车 / s / q。")
-        found = []
-        for pattern in item["patterns"]:
-            found.extend(path for path in (ROOT / item["dst"]).rglob(pattern)
-                         if path.is_file() and not path.name.startswith("~$") and "空白" not in path.name)
-        if not found:
-            say("  ! 没在 {} 下找到匹配 {} 的文件{}".format(
-                norm(ROOT / item["dst"]), "、".join(item["patterns"]),
-                "（必需项，先放料）" if item["required"] else ""))
-            if item["required"]:
-                return 3
-    say("")
-    say("  收料完成，继续校验与开工。")
-    return 0
+        if not hits:
+            pending.append({
+                "项": item["name"],
+                "必需": bool(item["required"]),
+                "放到": norm(ROOT / item["dst"]),
+                "怎么准备": item["how"],
+                "为什么需要": item["why"],
+            })
+    write_json(target, {
+        "schema": "cardo/ahp-pending/v1",
+        "生成时间": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "工作区": norm(ROOT),
+        "结论": "缺料，尚未开工" if pending else "无缺料",
+        "待补": pending,
+        "已到位": [{"项": item["name"], "文件": [norm(h) for h in hits[:3]]}
+                   for item, hits in rows if hits],
+        "阻塞原因": blockers,
+        "说明": notes,
+        "补齐后重跑": cmd_hint(),
+    })
+    return target
 
 
 MIRRORS = [
@@ -1197,8 +1173,6 @@ def _main(argv=None) -> int:
                     help="预填建议候选方案名（用户改名用）；不给则给全空白")
     ap.add_argument("--from", dest="start_from", default="", help="从第几步开始（如 03 / 08）")
     ap.add_argument("--to", dest="stop_at", default="", help="跑到第几步为止（如 02 / 07）")
-    ap.add_argument("--intake", action="store_true",
-                    help="收料引导：一项一项问，给绝对路径与准备方法，确认后再校验开工")
     ap.add_argument("--check", action="store_true", help="只做结构与输入校验，不跑流水线")
     ap.add_argument("--no-install", action="store_true", help="缺依赖时不安装")
     ap.add_argument("--dry-run", action="store_true", help="只打印将要执行的命令")
@@ -1309,14 +1283,6 @@ def _main(argv=None) -> int:
     ready = sum(1 for item, hits in rows if hits)
     list_path = write_intake_list(rows, params)
     say(f"  放料清单：{norm(list_path.relative_to(ROOT))}（已到位 {ready}/{len(rows)} 项）")
-    if args.intake:
-        code = run_intake(rows)
-        rows = intake_scan()
-        write_intake_list(rows, params)
-        if code != 0:
-            say(f"  按清单放料后重跑：{cmd_hint()}，或再跑 {cmd_hint('--intake')} 逐项确认")
-            return code
-
     say("[3/4] 参数与输入")
 
     # 目标步骤决定要不要项目全称：
@@ -1344,6 +1310,8 @@ def _main(argv=None) -> int:
         if blockers:
             for b in blockers:
                 say(f"  ✗ {b}")
+            pending_path = write_pending(rows, blockers, notes)
+            say(f"  待补料清单：{norm(pending_path.relative_to(ROOT))}")
             return 3
         say(f"  项目：{params.get('projectName') or '（未指定，问卷匿名用占位名）'}｜专家：{params['experts']} 位")
         if args.check:
@@ -1377,7 +1345,9 @@ def _main(argv=None) -> int:
         say(f"  ⑤ 出成果：{cmd_hint('--from 08')}")
         say(f"  完整步骤与状态：{norm(howto_path.relative_to(ROOT).parent / '放料清单.md')}"
             f"（每次运行刷新）")
-        return 0
+        pending_path = write_pending(rows, [], ["发卷已完成，等方案清单与回收问卷"])
+        say(f"  待补料清单：{norm(pending_path.relative_to(ROOT))}")
+        return 3
 
     blockers, notes = precheck(params, need_q, need_project)
     for n in notes:
@@ -1389,7 +1359,8 @@ def _main(argv=None) -> int:
         say(f"  领料区（空白问卷）：{norm(ROOT / PENDING_DIR)}")
         say(f"  回收区（放专家填好的）：{norm(ROOT / RECV_DIR)}")
         say(f"  填写说明：{norm(howto_path.relative_to(ROOT))}")
-        say(f"  逐项确认：{cmd_hint('--intake')}")
+        pending_path = write_pending(rows, blockers, notes)
+        say(f"  待补料清单：{norm(pending_path.relative_to(ROOT))}")
         say(f"  补齐后重跑：{cmd_hint()}")
         return 3
     say(f"  项目：{params.get('projectName') or '（未指定，成果文件里会显示占位名）'}｜专家：{params['experts']} 位")
@@ -1448,7 +1419,9 @@ def _main(argv=None) -> int:
         say(f"  ⑤ 出成果：{cmd_hint('--from 08')}")
         say(f"  完整步骤与状态：{norm(howto_path.relative_to(ROOT).parent / '放料清单.md')}"
             f"（每次运行刷新）")
-        return 0
+        pending_path = write_pending(rows, [], ["发卷已完成，等方案清单与回收问卷"])
+        say(f"  待补料清单：{norm(pending_path.relative_to(ROOT))}")
+        return 3
 
     if code == 0:
         say("[完成] 全链通过。成果：")

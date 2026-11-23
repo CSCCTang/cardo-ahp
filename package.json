@@ -1,6 +1,6 @@
 {
   "name": "cardo-ahp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cardo AHP 投资决策量化流水线：专家问卷、权重与一致性、方案评分与成果装配。",
   "type": "module",
   "main": "index.js",
